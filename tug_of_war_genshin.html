@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>綱引き物理シミュレーター</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Noto+Serif+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --gold: #d4af37;
+  --gold-light: #f0d060;
+  --gold-dim: #8a6f1e;
+  --blue-team: #4a9edd;
+  --blue-team-light: #7ec8f5;
+  --blue-team-dark: #1a5a8a;
+  --red-team: #dd4a4a;
+  --red-team-light: #f57e7e;
+  --red-team-dark: #8a1a1a;
+  --bg-deep: #0a0e14;
+  --bg-panel: rgba(8, 14, 22, 0.92);
+  --bg-card: rgba(15, 25, 40, 0.85);
+  --border-gold: rgba(212, 175, 55, 0.4);
+  --border-gold-bright: rgba(212, 175, 55, 0.8);
+  --text-primary: #e8d9b5;
+  --text-secondary: rgba(232, 217, 181, 0.6);
+  --text-dim: rgba(232, 217, 181, 0.35);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Noto Serif JP', serif;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── 背景装飾 ── */
+.bg-layer {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(212,175,55,0.07) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 40% at 15% 80%, rgba(74,158,221,0.05) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 85% 80%, rgba(221,74,74,0.05) 0%, transparent 60%);
+}
+.bg-grid {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image:
+    linear-gradient(rgba(212,175,55,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(212,175,55,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.bg-corner {
+  position: fixed; pointer-events: none; z-index: 0;
+  width: 300px; height: 300px;
+  opacity: 0.06;
+}
+.bg-corner.tl { top: -60px; left: -60px; background: radial-gradient(circle at 50% 50%, var(--gold) 0%, transparent 70%); }
+.bg-corner.br { bottom: -60px; right: -60px; background: radial-gradient(circle at 50% 50%, var(--gold) 0%, transparent 70%); }
+
+/* ── メインラッパー ── */
+.wrapper {
+  position: relative; z-index: 1;
+  max-width: 860px; margin: 0 auto; padding: 20px 16px 40px;
+}
+
+/* ── ヘッダー ── */
+.header {
+  text-align: center; margin-bottom: 20px;
+  animation: fadeDown 0.7s ease both;
+}
+.header-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: rgba(212,175,55,0.08);
+  border: 1px solid var(--border-gold);
+  border-radius: 2px; padding: 4px 16px; margin-bottom: 10px;
+  font-size: 11px; letter-spacing: 0.15em; color: var(--gold);
+  text-transform: uppercase;
+}
+.header-badge::before, .header-badge::after {
+  content: '◆'; font-size: 7px; color: var(--gold-dim);
+}
+h1 {
+  font-family: 'Cinzel', serif;
+  font-size: clamp(20px, 4vw, 30px);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--gold-light);
+  text-shadow: 0 0 30px rgba(212,175,55,0.3), 0 2px 4px rgba(0,0,0,0.8);
+}
+.header-sub {
+  margin-top: 6px; font-size: 12px; color: var(--text-secondary);
+  letter-spacing: 0.05em;
+}
+
+/* ── キャンバスエリア ── */
+.canvas-wrap {
+  position: relative; margin-bottom: 14px;
+  border-radius: 4px; overflow: hidden;
+  border: 1px solid var(--border-gold);
+  box-shadow: 0 0 40px rgba(0,0,0,0.6), inset 0 0 60px rgba(0,0,0,0.2);
+  animation: fadeUp 0.7s 0.1s ease both;
+}
+.canvas-wrap::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(212,175,55,0.04) 0%, transparent 40%, transparent 60%, rgba(0,0,0,0.2) 100%);
+  pointer-events: none; z-index: 1;
+}
+canvas { display: block; width: 100%; }
+
+/* ── コーナー装飾 ── */
+.corner-deco {
+  position: absolute; width: 18px; height: 18px;
+  z-index: 2; pointer-events: none;
+}
+.corner-deco::before, .corner-deco::after {
+  content: ''; position: absolute;
+  background: var(--gold);
+}
+.corner-deco.tl { top: 6px; left: 6px; }
+.corner-deco.tl::before { top: 0; left: 0; width: 100%; height: 2px; }
+.corner-deco.tl::after { top: 0; left: 0; width: 2px; height: 100%; }
+.corner-deco.tr { top: 6px; right: 6px; }
+.corner-deco.tr::before { top: 0; right: 0; width: 100%; height: 2px; }
+.corner-deco.tr::after { top: 0; right: 0; width: 2px; height: 100%; }
+.corner-deco.bl { bottom: 6px; left: 6px; }
+.corner-deco.bl::before { bottom: 0; left: 0; width: 100%; height: 2px; }
+.corner-deco.bl::after { bottom: 0; left: 0; width: 2px; height: 100%; }
+.corner-deco.br { bottom: 6px; right: 6px; }
+.corner-deco.br::before { bottom: 0; right: 0; width: 100%; height: 2px; }
+.corner-deco.br::after { bottom: 0; right: 0; width: 2px; height: 100%; }
+
+/* ── 勝者表示 ── */
+.winner-bar {
+  text-align: center; min-height: 36px; margin-bottom: 10px;
+  display: flex; align-items: center; justify-content: center;
+}
+.winner-text {
+  font-family: 'Cinzel', serif;
+  font-size: 20px; font-weight: 700;
+  letter-spacing: 0.12em;
+  opacity: 0; transform: scale(0.8);
+  transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  text-shadow: 0 0 20px currentColor;
+}
+.winner-text.show { opacity: 1; transform: scale(1); }
+.winner-text.blue { color: var(--blue-team-light); }
+.winner-text.red { color: var(--red-team-light); }
+
+/* ── ステータスバー ── */
+.stats-bar {
+  display: flex; gap: 6px; margin-bottom: 16px;
+  flex-wrap: wrap; justify-content: center;
+  animation: fadeUp 0.7s 0.15s ease both;
+}
+.stat-chip {
+  display: flex; align-items: center; gap: 5px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-gold);
+  border-radius: 2px; padding: 5px 12px;
+  font-size: 12px; color: var(--text-secondary);
+  transition: border-color 0.3s, color 0.3s;
+  letter-spacing: 0.03em;
+}
+.stat-chip .val { color: var(--gold-light); font-weight: 500; }
+.stat-chip.active { border-color: var(--border-gold-bright); color: var(--text-primary); }
+
+/* ── チームグリッド ── */
+.teams-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  margin-bottom: 14px;
+  animation: fadeUp 0.7s 0.2s ease both;
+}
+@media (max-width: 580px) { .teams-grid { grid-template-columns: 1fr; } }
+
+.team-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-gold);
+  border-radius: 4px; overflow: hidden;
+  position: relative;
+}
+.team-panel::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0; height: 3px;
+}
+.team-panel.blue::before { background: linear-gradient(90deg, transparent, var(--blue-team), transparent); }
+.team-panel.red::before { background: linear-gradient(90deg, transparent, var(--red-team), transparent); }
+
+.team-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid rgba(212,175,55,0.12);
+}
+.team-icon {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; flex-shrink: 0;
+}
+.team-icon.blue { background: rgba(74,158,221,0.2); border: 1px solid var(--blue-team); color: var(--blue-team-light); }
+.team-icon.red { background: rgba(221,74,74,0.2); border: 1px solid var(--red-team); color: var(--red-team-light); }
+.team-title {
+  font-family: 'Cinzel', serif; font-size: 13px; font-weight: 600; letter-spacing: 0.08em;
+}
+.team-title.blue { color: var(--blue-team-light); }
+.team-title.red { color: var(--red-team-light); }
+.team-total {
+  margin-left: auto; font-size: 11px; color: var(--text-dim);
+}
+.team-total span { color: var(--gold); }
+
+.players-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 6px; padding: 8px;
+}
+@media (max-width: 400px) { .players-grid { grid-template-columns: repeat(2,1fr); } }
+
+.player-card {
+  background: rgba(255,255,255,0.03);
+  border-radius: 3px; padding: 7px 8px;
+  border: 1px solid rgba(212,175,55,0.1);
+  transition: border-color 0.2s, background 0.2s;
+  cursor: default;
+}
+.player-card:hover {
+  border-color: rgba(212,175,55,0.25);
+  background: rgba(212,175,55,0.04);
+}
+.player-name {
+  font-family: 'Cinzel', serif; font-size: 11px; font-weight: 600;
+  letter-spacing: 0.06em; margin-bottom: 6px;
+}
+.player-name.blue { color: var(--blue-team-light); }
+.player-name.red { color: var(--red-team-light); }
+
+.param-row {
+  display: flex; align-items: center; gap: 4px; margin-bottom: 4px;
+}
+.param-label {
+  font-size: 10px; color: var(--text-dim); width: 24px; flex-shrink: 0;
+  letter-spacing: 0.03em;
+}
+.param-val {
+  font-size: 10px; font-weight: 500; color: var(--gold-light);
+  min-width: 30px; text-align: right; flex-shrink: 0;
+}
+
+/* ── スライダー ── */
+input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1; height: 3px; border-radius: 2px;
+  background: rgba(212,175,55,0.15);
+  outline: none; cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 6px rgba(212,175,55,0.5);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+input[type=range]:hover::-webkit-slider-thumb {
+  transform: scale(1.3);
+  box-shadow: 0 0 12px rgba(212,175,55,0.8);
+}
+.team-panel.blue input[type=range]::-webkit-slider-thumb { background: var(--blue-team-light); box-shadow: 0 0 6px rgba(126,200,245,0.5); }
+.team-panel.blue input[type=range]:hover::-webkit-slider-thumb { box-shadow: 0 0 12px rgba(126,200,245,0.8); }
+.team-panel.red input[type=range]::-webkit-slider-thumb { background: var(--red-team-light); box-shadow: 0 0 6px rgba(245,126,126,0.5); }
+.team-panel.red input[type=range]:hover::-webkit-slider-thumb { box-shadow: 0 0 12px rgba(245,126,126,0.8); }
+
+/* ── ボタンエリア ── */
+.btn-area {
+  display: flex; gap: 10px;
+  animation: fadeUp 0.7s 0.25s ease both;
+}
+.btn {
+  flex: 1; padding: 12px;
+  font-family: 'Cinzel', serif; font-size: 14px; font-weight: 600;
+  letter-spacing: 0.1em; cursor: pointer;
+  border-radius: 3px; border: none;
+  position: relative; overflow: hidden;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.btn:active { transform: scale(0.97); }
+
+.btn-start {
+  background: linear-gradient(135deg, #1a4a6e 0%, #0d2d44 100%);
+  color: var(--blue-team-light);
+  border: 1px solid var(--blue-team);
+  box-shadow: 0 0 20px rgba(74,158,221,0.15), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.btn-start:hover { box-shadow: 0 0 30px rgba(74,158,221,0.3), inset 0 1px 0 rgba(255,255,255,0.08); }
+.btn-start::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(126,200,245,0.1) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.btn-reset {
+  background: linear-gradient(135deg, rgba(212,175,55,0.12) 0%, rgba(212,175,55,0.04) 100%);
+  color: var(--gold);
+  border: 1px solid var(--border-gold);
+  box-shadow: 0 0 20px rgba(212,175,55,0.08);
+}
+.btn-reset:hover { box-shadow: 0 0 30px rgba(212,175,55,0.18); border-color: var(--border-gold-bright); }
+
+/* ── アニメーション ── */
+@keyframes fadeDown {
+  from { opacity: 0; transform: translateY(-16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse-gold {
+  0%, 100% { box-shadow: 0 0 10px rgba(212,175,55,0.2); }
+  50% { box-shadow: 0 0 25px rgba(212,175,55,0.5); }
+}
+@keyframes shimmer {
+  0% { transform: translateX(-100%) skewX(-15deg); }
+  100% { transform: translateX(200%) skewX(-15deg); }
+}
+.running .btn-start { animation: pulse-gold 2s infinite; }
+
+/* 力バーのアニメ */
+.force-bar-track {
+  height: 4px; background: rgba(255,255,255,0.06);
+  border-radius: 2px; overflow: hidden; margin-top: 8px;
+}
+.force-bar-fill {
+  height: 100%; border-radius: 2px;
+  transition: width 0.3s ease;
+}
+.force-bar-fill.blue { background: linear-gradient(90deg, var(--blue-team-dark), var(--blue-team-light)); }
+.force-bar-fill.red { background: linear-gradient(90deg, var(--red-team-dark), var(--red-team-light)); }
+
+/* 中央プログレス */
+.rope-progress-wrap {
+  position: relative; margin-bottom: 6px;
+  animation: fadeUp 0.7s 0.12s ease both;
+}
+.rope-progress-bg {
+  height: 6px; background: rgba(255,255,255,0.06);
+  border-radius: 3px; border: 1px solid var(--border-gold);
+  overflow: hidden; position: relative;
+}
+.rope-progress-a {
+  position: absolute; top: 0; left: 0; bottom: 0;
+  background: linear-gradient(90deg, var(--blue-team-dark), var(--blue-team));
+  transition: width 0.15s ease;
+}
+.rope-progress-b {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  background: linear-gradient(270deg, var(--red-team-dark), var(--red-team));
+  transition: width 0.15s ease;
+}
+.rope-progress-center {
+  position: absolute; top: -2px; left: 50%; transform: translateX(-50%);
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--gold); border: 2px solid var(--bg-deep);
+  box-shadow: 0 0 8px rgba(212,175,55,0.6);
+  transition: left 0.15s ease;
+}
+.progress-labels {
+  display: flex; justify-content: space-between;
+  font-size: 10px; color: var(--text-dim); margin-top: 3px;
+  letter-spacing: 0.05em;
+}
+.progress-labels .la { color: var(--blue-team); }
+.progress-labels .lb { color: var(--red-team); }
+</style>
+</head>
+<body>
+<div class="bg-layer"></div>
+<div class="bg-grid"></div>
+<div class="bg-corner tl"></div>
+<div class="bg-corner br"></div>
+
+<div class="wrapper">
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="header-badge">Physics Simulation</div>
+    <h1>綱引き 六対六</h1>
+    <div class="header-sub">身長・体重・ポジションが引力に影響する物理演算</div>
+  </div>
+
+  <!-- キャンバス -->
+  <div class="canvas-wrap" id="canvas-wrap">
+    <div class="corner-deco tl"></div>
+    <div class="corner-deco tr"></div>
+    <div class="corner-deco bl"></div>
+    <div class="corner-deco br"></div>
+    <canvas id="c" width="840" height="260"></canvas>
+  </div>
+
+  <!-- 勝者 -->
+  <div class="winner-bar">
+    <div class="winner-text" id="winner"></div>
+  </div>
+
+  <!-- 綱の位置プログレス -->
+  <div class="rope-progress-wrap">
+    <div class="rope-progress-bg">
+      <div class="rope-progress-a" id="prog-a" style="width:50%"></div>
+      <div class="rope-progress-b" id="prog-b" style="width:50%"></div>
+      <div class="rope-progress-center" id="prog-center"></div>
+    </div>
+    <div class="progress-labels">
+      <span class="la">◀ A 引き寄せ</span>
+      <span class="lb">B 引き寄せ ▶</span>
+    </div>
+  </div>
+
+  <!-- ステータスチップ -->
+  <div class="stats-bar">
+    <div class="stat-chip"><span>合力</span><span class="val" id="sc-f">0 N</span></div>
+    <div class="stat-chip"><span>速度</span><span class="val" id="sc-v">0.00 m/s</span></div>
+    <div class="stat-chip"><span>時間</span><span class="val" id="sc-t">0.0 s</span></div>
+    <div class="stat-chip"><span>A 総力</span><span class="val" id="sc-a">0 N</span></div>
+    <div class="stat-chip"><span>B 総力</span><span class="val" id="sc-b">0 N</span></div>
+  </div>
+
+  <!-- チームグリッド -->
+  <div class="teams-grid">
+    <div class="team-panel blue" id="panel-a">
+      <div class="team-header">
+        <div class="team-icon blue">A</div>
+        <div class="team-title blue">Team A — 蒼穹</div>
+        <div class="team-total">総力 <span id="total-a">—</span> N</div>
+      </div>
+      <div class="force-bar-track"><div class="force-bar-fill blue" id="bar-a" style="width:50%"></div></div>
+      <div class="players-grid" id="grid-a"></div>
+    </div>
+    <div class="team-panel red" id="panel-b">
+      <div class="team-header">
+        <div class="team-icon red">B</div>
+        <div class="team-title red">Team B — 朱炎</div>
+        <div class="team-total">総力 <span id="total-b">—</span> N</div>
+      </div>
+      <div class="force-bar-track"><div class="force-bar-fill red" id="bar-b" style="width:50%"></div></div>
+      <div class="players-grid" id="grid-b"></div>
+    </div>
+  </div>
+
+  <!-- ボタン -->
+  <div class="btn-area">
+    <button class="btn btn-start" id="btn-start">▶ 開始</button>
+    <button class="btn btn-reset" id="btn-reset">↺ リセット</button>
+  </div>
+</div>
+
+<script>
+// ── キャンバス設定 ──────────────────────────────────────────────
+const W = 840, H = 260;
+const GROUND_Y = H - 36;
+const ROPE_Y = H / 2 - 14;
+const WIN_DIST = 110;
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+canvas.width = W; canvas.height = H;
+
+// ── プレイヤーデータ ────────────────────────────────────────────
+const NAMES_A = ['A1', 'A2', 'A3', 'A4', 'A5', 'A6'];
+const NAMES_B = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6'];
+const defaultA = [{w:72,h:170},{w:85,h:182},{w:68,h:165},{w:90,h:178},{w:75,h:172},{w:80,h:176}];
+const defaultB = [{w:70,h:168},{w:88,h:185},{w:65,h:163},{w:95,h:180},{w:73,h:171},{w:78,h:175}];
+
+// ── グリッド構築 ────────────────────────────────────────────────
+function buildGrid(containerId, names, defaults) {
+  const grid = document.getElementById(containerId);
+  grid.innerHTML = '';
+  names.forEach((name, i) => {
+    const d = defaults[i];
+    const teamClass = containerId === 'grid-a' ? 'blue' : 'red';
+    const div = document.createElement('div');
+    div.className = 'player-card';
+    div.innerHTML = `
+      <div class="player-name ${teamClass}">${name}</div>
+      <div class="param-row">
+        <span class="param-label">体重</span>
+        <input type="range" min="50" max="120" value="${d.w}" step="1" id="${containerId}-w${i}">
+        <span class="param-val" id="${containerId}-wv${i}">${d.w}kg</span>
+      </div>
+      <div class="param-row">
+        <span class="param-label">身長</span>
+        <input type="range" min="150" max="200" value="${d.h}" step="1" id="${containerId}-h${i}">
+        <span class="param-val" id="${containerId}-hv${i}">${d.h}cm</span>
+      </div>
+      <div class="param-row">
+        <span class="param-label">位置</span>
+        <input type="range" min="1" max="6" value="${i+1}" step="1" id="${containerId}-p${i}">
+        <span class="param-val" id="${containerId}-pv${i}">${i+1}番</span>
+      </div>
+    `;
+    grid.appendChild(div);
+    ['w', 'h', 'p'].forEach(type => {
+      const el = document.getElementById(`${containerId}-${type}${i}`);
+      const unit = type === 'w' ? 'kg' : type === 'h' ? 'cm' : '番';
+      el.addEventListener('input', () => {
+        document.getElementById(`${containerId}-${type}v${i}`).textContent = el.value + unit;
+        if (!running) drawStatic();
+        updateForceDisplay();
+      });
+    });
+  });
+}
+buildGrid('grid-a', NAMES_A, defaultA);
+buildGrid('grid-b', NAMES_B, defaultB);
+
+// ── 物理 ────────────────────────────────────────────────────────
+const G = 9.8, MU = 0.72, FATIGUE = 4;
+
+function getPlayer(containerId, i) {
+  return {
+    w: +document.getElementById(`${containerId}-w${i}`).value,
+    h: +document.getElementById(`${containerId}-h${i}`).value,
+    pos: +document.getElementById(`${containerId}-p${i}`).value,
+  };
+}
+function getTeam(containerId) {
+  return Array.from({ length: 6 }, (_, i) => getPlayer(containerId, i));
+}
+function playerForce(p, elapsed, fatigue) {
+  const hf = 0.8 + ((p.h - 150) / 50) * 0.4;
+  const wf = Math.sqrt(p.w / 70);
+  const pf = p.pos <= 2 ? 1.1 : p.pos <= 4 ? 1.0 : 0.92;
+  const ff = Math.max(0.35, 1 - fatigue * 0.015 * elapsed);
+  return Math.min(320 * hf * wf * pf * ff, p.w * G * MU);
+}
+function teamForce(players, elapsed) {
+  return players.reduce((s, p) => s + playerForce(p, elapsed, FATIGUE), 0);
+}
+function teamMass(players) { return players.reduce((s, p) => s + p.w, 0); }
+
+// ── 力バー更新 ──────────────────────────────────────────────────
+function updateForceDisplay(elapsed = 0) {
+  const a = getTeam('grid-a'), b = getTeam('grid-b');
+  const fA = Math.round(teamForce(a, elapsed));
+  const fB = Math.round(teamForce(b, elapsed));
+  const total = fA + fB;
+  const pctA = total > 0 ? (fA / total * 100) : 50;
+  const pctB = total > 0 ? (fB / total * 100) : 50;
+  document.getElementById('bar-a').style.width = pctA + '%';
+  document.getElementById('bar-b').style.width = pctB + '%';
+  document.getElementById('total-a').textContent = fA;
+  document.getElementById('total-b').textContent = fB;
+  document.getElementById('sc-a').textContent = fA + ' N';
+  document.getElementById('sc-b').textContent = fB + ' N';
+}
+
+// ── 描画 ────────────────────────────────────────────────────────
+// パーティクル
+const particles = [];
+function spawnParticle(x, color) {
+  for (let i = 0; i < 3; i++) {
+    particles.push({
+      x, y: ROPE_Y,
+      vx: (Math.random() - 0.5) * 3,
+      vy: -(Math.random() * 2 + 0.5),
+      life: 1, color,
+      size: Math.random() * 3 + 1
+    });
+  }
+}
+function updateParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.08;
+    p.life -= 0.025;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+function drawParticles() {
+  particles.forEach(p => {
+    ctx.save();
+    ctx.globalAlpha = p.life * 0.8;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+}
+
+// グロウエフェクト
+function drawGlow(x, y, r, color, alpha = 0.3) {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, color.replace(')', `, ${alpha})`).replace('rgb', 'rgba'));
+  g.addColorStop(1, color.replace(')', ', 0)').replace('rgb', 'rgba'));
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawScene(rx, teA, teB, elapsed, vel) {
+  ctx.clearRect(0, 0, W, H);
+
+  // 背景グラデーション
+  const bgG = ctx.createLinearGradient(0, 0, 0, H);
+  bgG.addColorStop(0, '#060a10');
+  bgG.addColorStop(0.6, '#0a1018');
+  bgG.addColorStop(1, '#0e1520');
+  ctx.fillStyle = bgG;
+  ctx.fillRect(0, 0, W, H);
+
+  // グリッドライン
+  ctx.strokeStyle = 'rgba(212,175,55,0.04)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 40) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += 40) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  // 地面
+  const gndG = ctx.createLinearGradient(0, GROUND_Y, 0, H);
+  gndG.addColorStop(0, 'rgba(212,175,55,0.12)');
+  gndG.addColorStop(0.3, 'rgba(30,22,8,0.8)');
+  gndG.addColorStop(1, 'rgba(10,8,2,0.9)');
+  ctx.fillStyle = gndG;
+  ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
+  // 地面ライン
+  ctx.strokeStyle = 'rgba(212,175,55,0.3)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, GROUND_Y); ctx.lineTo(W, GROUND_Y); ctx.stroke();
+
+  // 中心線（ゴール）
+  ctx.setLineDash([6, 4]);
+  ctx.strokeStyle = 'rgba(212,175,55,0.25)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(W / 2, 10); ctx.lineTo(W / 2, GROUND_Y); ctx.stroke();
+
+  const wA = W / 2 - WIN_DIST, wB = W / 2 + WIN_DIST;
+  ctx.strokeStyle = 'rgba(74,158,221,0.4)';
+  ctx.beginPath(); ctx.moveTo(wA, 10); ctx.lineTo(wA, GROUND_Y); ctx.stroke();
+  ctx.strokeStyle = 'rgba(221,74,74,0.4)';
+  ctx.beginPath(); ctx.moveTo(wB, 10); ctx.lineTo(wB, GROUND_Y); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ゴールゾーンのグロウ
+  const gA = ctx.createLinearGradient(wA - 30, 0, wA + 10, 0);
+  gA.addColorStop(0, 'rgba(74,158,221,0.08)');
+  gA.addColorStop(1, 'transparent');
+  ctx.fillStyle = gA; ctx.fillRect(wA - 30, 0, 40, GROUND_Y);
+
+  const gB = ctx.createLinearGradient(wB - 10, 0, wB + 30, 0);
+  gB.addColorStop(0, 'transparent');
+  gB.addColorStop(1, 'rgba(221,74,74,0.08)');
+  ctx.fillStyle = gB; ctx.fillRect(wB - 10, 0, 40, GROUND_Y);
+
+  // ラベル
+  ctx.font = 'bold 11px Cinzel, serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(74,158,221,0.7)';
+  ctx.fillText('A 勝', wA, 20);
+  ctx.fillStyle = 'rgba(221,74,74,0.7)';
+  ctx.fillText('B 勝', wB, 20);
+  ctx.textAlign = 'left';
+
+  // ── 綱 ──────────────────────────────────────────
+  const ROPE_LEN = 300;
+  const rx0 = rx - ROPE_LEN / 2, rx1 = rx + ROPE_LEN / 2;
+
+  // グロウシャドウ
+  ctx.save();
+  ctx.shadowColor = 'rgba(180,120,40,0.4)';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  for (let i = 0; i <= 20; i++) {
+    const t = i / 20;
+    const px = rx0 + t * (rx1 - rx0);
+    const py = ROPE_Y + Math.sin(t * Math.PI) * 9;
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.strokeStyle = '#7a5c2e';
+  ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.stroke();
+  ctx.restore();
+
+  // メイン綱
+  ctx.beginPath();
+  for (let i = 0; i <= 20; i++) {
+    const t = i / 20;
+    const px = rx0 + t * (rx1 - rx0);
+    const py = ROPE_Y + Math.sin(t * Math.PI) * 9;
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  const ropeG = ctx.createLinearGradient(rx0, 0, rx1, 0);
+  ropeG.addColorStop(0, '#b8862e');
+  ropeG.addColorStop(0.5, '#e0b040');
+  ropeG.addColorStop(1, '#b8862e');
+  ctx.strokeStyle = ropeG; ctx.lineWidth = 5; ctx.stroke();
+
+  // 綱のテクスチャ（細い線）
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  for (let i = 0; i <= 20; i++) {
+    const t = i / 20;
+    const px = rx0 + t * (rx1 - rx0);
+    const py = ROPE_Y + Math.sin(t * Math.PI) * 9 - 1.5;
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 中心マーカー（赤リボン）
+  ctx.save();
+  ctx.shadowColor = 'rgba(200,50,50,0.6)';
+  ctx.shadowBlur = 10;
+  ctx.beginPath(); ctx.arc(rx, ROPE_Y, 8, 0, Math.PI * 2);
+  ctx.fillStyle = '#cc2222'; ctx.fill();
+  ctx.strokeStyle = '#ff6666'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.restore();
+
+  // ── 人物描画 ──────────────────────────────────────
+  function drawFigure(x, color, colorLight, glowColor, p, dir) {
+    const scaleH = 0.7 + ((p.h - 150) / 50) * 0.4;
+    const scaleW = 0.75 + (p.w - 50) / 140 * 0.55;
+    const bodyH = 38 * scaleH, headR = 7.5 * scaleH, sw = 11 * scaleW;
+    const fy = GROUND_Y - bodyH - headR * 2;
+
+    // シャドウ
+    ctx.save();
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = 8;
+
+    // 体
+    ctx.strokeStyle = color; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+
+    // 脚
+    ctx.beginPath();
+    ctx.moveTo(x, fy + headR * 2 + bodyH);
+    ctx.lineTo(x - 7 * scaleW, GROUND_Y);
+    ctx.moveTo(x, fy + headR * 2 + bodyH);
+    ctx.lineTo(x + 7 * scaleW, GROUND_Y);
+    ctx.stroke();
+
+    // 胴
+    ctx.beginPath();
+    ctx.moveTo(x, fy + headR * 2);
+    ctx.lineTo(x, fy + headR * 2 + bodyH);
+    ctx.stroke();
+
+    // 肩
+    ctx.beginPath();
+    ctx.moveTo(x - sw, fy + headR * 2 + bodyH * 0.28);
+    ctx.lineTo(x + sw, fy + headR * 2 + bodyH * 0.28);
+    ctx.stroke();
+
+    // 腕→綱
+    ctx.strokeStyle = colorLight; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x + dir * sw, fy + headR * 2 + bodyH * 0.28);
+    ctx.quadraticCurveTo(
+      x + dir * sw * 1.5, ROPE_Y - 10,
+      rx + (dir < 0 ? -ROPE_LEN / 2 : ROPE_LEN / 2), ROPE_Y
+    );
+    ctx.stroke();
+
+    // 頭（グロウ付き）
+    ctx.fillStyle = colorLight;
+    ctx.beginPath(); ctx.arc(x, fy + headR, headR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x, fy + headR, headR, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.restore();
+
+    // 体重テキスト
+    ctx.font = '10px Noto Serif JP, serif';
+    ctx.fillStyle = 'rgba(212,175,55,0.7)';
+    ctx.textAlign = 'center';
+    ctx.fillText(p.w + 'kg', x, GROUND_Y + 20);
+    ctx.textAlign = 'left';
+  }
+
+  const SPACING = 46;
+  teA.forEach(p => {
+    const x = rx - ROPE_LEN / 2 - 28 - (p.pos - 1) * SPACING;
+    drawFigure(x, '#4a9edd', '#7ec8f5', 'rgba(74,158,221,0.5)', p, -1);
+  });
+  teB.forEach(p => {
+    const x = rx + ROPE_LEN / 2 + 28 + (p.pos - 1) * SPACING;
+    drawFigure(x, '#dd4a4a', '#f57e7e', 'rgba(221,74,74,0.5)', p, 1);
+  });
+
+  // パーティクル
+  updateParticles();
+  drawParticles();
+
+  // 速度に応じてパーティクル生成
+  if (running && Math.abs(vel) > 0.3) {
+    const pc = vel < 0 ? '#7ec8f5' : '#f57e7e';
+    if (Math.random() < 0.3) spawnParticle(rx, pc);
+  }
+
+  // 下部の力表示
+  const fA = Math.round(teamForce(teA, elapsed));
+  const fB = Math.round(teamForce(teB, elapsed));
+  ctx.font = '500 12px Noto Serif JP, serif';
+  ctx.fillStyle = '#4a9edd';
+  ctx.fillText('A: ' + fA + ' N', 12, H - 6);
+  ctx.fillStyle = '#dd4a4a';
+  ctx.textAlign = 'right';
+  ctx.fillText('B: ' + fB + ' N', W - 12, H - 6);
+  ctx.textAlign = 'left';
+}
+
+// ── プログレスバー更新 ──────────────────────────────────────────
+function updateProgress(rx) {
+  const range = WIN_DIST * 2;
+  const offset = rx - (W / 2 - WIN_DIST);
+  const pctA = Math.max(0, Math.min(100, (1 - offset / range) * 100));
+  const pctB = Math.max(0, Math.min(100, (offset / range) * 100));
+  document.getElementById('prog-a').style.width = pctA + '%';
+  document.getElementById('prog-b').style.width = pctB + '%';
+  const centerPct = Math.max(5, Math.min(95, offset / range * 100));
+  document.getElementById('prog-center').style.left = centerPct + '%';
+}
+
+// ── シミュレーション ────────────────────────────────────────────
+let ropeX = W / 2, velocity = 0, elapsed = 0, running = false;
+let animId = null, lastTs = null;
+const wrapper = document.querySelector('.wrapper');
+
+function drawStatic() {
+  const a = getTeam('grid-a'), b = getTeam('grid-b');
+  drawScene(W / 2, a, b, 0, 0);
+  updateProgress(W / 2);
+  document.getElementById('winner').textContent = '';
+  document.getElementById('winner').classList.remove('show', 'blue', 'red');
+  document.getElementById('sc-f').textContent = '0 N';
+  document.getElementById('sc-v').textContent = '0.00 m/s';
+  document.getElementById('sc-t').textContent = '0.0 s';
+  updateForceDisplay(0);
+}
+
+function step(ts) {
+  if (!lastTs) lastTs = ts;
+  const dt = Math.min((ts - lastTs) / 1000, 0.05);
+  lastTs = ts; elapsed += dt;
+  const a = getTeam('grid-a'), b = getTeam('grid-b');
+  const fA = teamForce(a, elapsed), fB = teamForce(b, elapsed);
+  const net = fA - fB;
+  const mass = teamMass(a) + teamMass(b);
+  velocity += (net / mass) * dt;
+  velocity *= 0.97;
+  ropeX += velocity * dt * 60;
+  drawScene(ropeX, a, b, elapsed, velocity);
+  updateProgress(ropeX);
+  document.getElementById('sc-f').textContent = Math.round(net) + ' N';
+  document.getElementById('sc-v').textContent = velocity.toFixed(2) + ' m/s';
+  document.getElementById('sc-t').textContent = elapsed.toFixed(1) + ' s';
+  updateForceDisplay(elapsed);
+
+  if (ropeX < W / 2 - WIN_DIST) { endGame('Team A — 蒼穹の勝利！', 'blue'); return; }
+  if (ropeX > W / 2 + WIN_DIST) { endGame('Team B — 朱炎の勝利！', 'red'); return; }
+  animId = requestAnimationFrame(step);
+}
+
+function endGame(msg, side) {
+  running = false;
+  wrapper.classList.remove('running');
+  const el = document.getElementById('winner');
+  el.textContent = msg;
+  el.className = 'winner-text show ' + side;
+  document.getElementById('btn-start').textContent = '▶ 開始';
+  // 勝者側にパーティクルを大量生成
+  const color = side === 'blue' ? '#7ec8f5' : '#f57e7e';
+  for (let i = 0; i < 60; i++) {
+    setTimeout(() => spawnParticle(ropeX + (Math.random() - 0.5) * 60, color), i * 30);
+  }
+}
+
+document.getElementById('btn-start').addEventListener('click', () => {
+  if (running) {
+    running = false;
+    cancelAnimationFrame(animId);
+    wrapper.classList.remove('running');
+    document.getElementById('btn-start').textContent = '▶ 開始';
+    return;
+  }
+  running = true; lastTs = null;
+  wrapper.classList.add('running');
+  document.getElementById('btn-start').textContent = '⏸ 一時停止';
+  document.getElementById('winner').classList.remove('show', 'blue', 'red');
+  animId = requestAnimationFrame(step);
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  running = false; cancelAnimationFrame(animId);
+  wrapper.classList.remove('running');
+  ropeX = W / 2; velocity = 0; elapsed = 0; lastTs = null;
+  particles.length = 0;
+  document.getElementById('btn-start').textContent = '▶ 開始';
+  drawStatic();
+});
+
+drawStatic();
+updateForceDisplay(0);
+</script>
+</body>
+</html>
